@@ -51,7 +51,7 @@ def CreateGraph_1():
 print("Probando la creación de un grafo desde un archivo de texto...")
 
 # Asegúrate de que el archivo 'graph_data.txt' exista y tenga el formato correcto
-G_from_file = Graph.CreateGraphFromFile('graph_data.txt')
+G_from_file = Graph.CreateGraphFromFile('../pythonProject17/apptkinter/Lib/graph_data.txt')
 
 # Imprimir los nodos y sus vecinos
 print("\nLista de nodos y sus vecinos desde archivo:")
