@@ -4,13 +4,13 @@ from graph import *
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 
-# Variables globales
+
 current_graph = None
 canvas = None
 fig = None
 ax = None
 selected_nodes = []
-modo = "navegar"  # modos: "nodo", "segmento", "vecinos"
+modo = "navegar"  "
 
 # Ventana principal
 root = tk.Tk()
@@ -159,18 +159,18 @@ def guardar_grafo():
         SaveGraphToFile(current_graph, path)
         messagebox.showinfo("Éxito", "Grafo guardado correctamente.")
 
-# Botones principales
+
 tk.Button(frame_buttons, text="Cargar Grafo desde Archivo", command=load_graph_from_file, width=30).pack(pady=5)
 tk.Button(frame_buttons, text="Mostrar Grafo Ejemplo", command=load_example_graph, width=30).pack(pady=5)
 tk.Button(frame_buttons, text="Mostrar Mi Grafo (graph_data.txt)", command=load_graph_2, width=30).pack(pady=5)
 tk.Button(frame_buttons, text="Nuevo Grafo (Vacío)", command=nuevo_grafo, width=30).pack(pady=5)
 tk.Button(frame_buttons, text="Guardar Grafo en Archivo", command=guardar_grafo, width=30).pack(pady=5)
 
-# Modos interactivos
+
 tk.Label(frame_buttons, text="Modo de clic:").pack(pady=(10,0))
 tk.Button(frame_buttons, text="➕ Añadir Nodo", command=lambda: set_modo("nodo"), width=30).pack(pady=2)
 tk.Button(frame_buttons, text="🔗 Añadir Segmento", command=lambda: set_modo("segmento"), width=30).pack(pady=2)
 tk.Button(frame_buttons, text="👁️ Ver Vecinos", command=lambda: set_modo("vecinos"), width=30).pack(pady=2)
 
-# Iniciar interfaz
+
 root.mainloop()
