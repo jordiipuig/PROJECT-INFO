@@ -1,4 +1,4 @@
-# node.py
+
 
 import math
 
@@ -7,8 +7,7 @@ class Node:
         self.name = name
         self.x = x        # X
         self.y = y        #  Y
-        self.neighbors = []  # nodos vecinos
-
+        self.neighbors = []
     def AddNeighbor(self, n2):
 
         if n2 not in self.neighbors:

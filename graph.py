@@ -1,123 +1,111 @@
-
-
-
 from node import Node
 from segment import Segment
 import matplotlib.pyplot as plt
 
-
 class Graph:
     def __init__(self):
-        self.nodes = []  # Lista de nodos
-        self.segments = []  # Lista de segmentos
+        self.nodes = []
+        self.segments = []
 
-    def AddNode(self, n):
-
-        for node in self.nodes:
-            if node.name == n.name:
-                return False
-        self.nodes.append(n)
-        return True
-
-    def AddSegment(self, nameOriginNode, nameDestinationNode):
-
-        origin = None
-        destination = None
-
-        for node in self.nodes:
-            if node.name == nameOriginNode:
-                origin = node
-            if node.name == nameDestinationNode:
-                destination = node
-
-        if origin is None or destination is None:
+def AddNode(g, n):
+    for node in g.nodes:
+        if node.name == n.name:
             return False
+    g.nodes.append(n)
+    return True
 
-        segment = Segment(f"{nameOriginNode}{nameDestinationNode}", origin, destination)
-        self.segments.append(segment)
+def AddSegment(g, name, nameOrigin, nameDestination):
+    origin = next((n for n in g.nodes if n.name == nameOrigin), None)
+    destination = next((n for n in g.nodes if n.name == nameDestination), None)
+    if origin is None or destination is None:
+        return False
+    segment = Segment(name, origin, destination)
+    g.segments.append(segment)
+    origin.AddNeighbor(destination)
+    return True
 
-        origin.AddNeighbor(destination)
-        return True
+def RemoveNode(g, node_name):
+    g.nodes = [n for n in g.nodes if n.name != node_name]
+    g.segments = [s for s in g.segments if s.origin.name != node_name and s.destination.name != node_name]
+    return True
 
-    def GetClosest(self, x, y):
+def SaveGraphToFile(g, path):
+    with open(path, 'w') as f:
+        f.write("NODES\n")
+        for node in g.nodes:
+            f.write(f"{node.name} {node.x} {node.y}\n")
+        f.write("\nSEGMENTS\n")
+        for segment in g.segments:
+            f.write(f"{segment.name} {segment.origin.name} {segment.destination.name}\n")
 
-        closest_node = None
-        min_distance = float('inf')
+def LoadGraphFromFile(path):
+    g = Graph()
+    section = None
+    with open(path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line == "" or line.startswith("#"):
+                continue
+            if line.upper() == "NODES":
+                section = "nodes"
+                continue
+            elif line.upper() == "SEGMENTS":
+                section = "segments"
+                continue
+            parts = line.split()
+            if section == "nodes":
+                name, x, y = parts[0], float(parts[1]), float(parts[2])
+                AddNode(g, Node(name, x, y))
+            elif section == "segments":
+                name, origin, destination = parts
+                AddSegment(g, name, origin, destination)
+    return g
 
-        for node in self.nodes:
-            distance = node.Distance(Node('', x, y))  # Usamos una "copia" del nodo con las coordenadas (x, y)
-            if distance < min_distance:
-                min_distance = distance
-                closest_node = node
+def GetClosest(g, x, y):
+    temp = Node("temp", x, y)
+    return min(g.nodes, key=lambda n: n.Distance(temp))
 
-        return closest_node
+def CreateGraph_1():
+    G = Graph()
+    AddNode(G, Node("A", 1, 20))
+    AddNode(G, Node("B", 8, 17))
+    AddNode(G, Node("C", 15, 20))
+    AddNode(G, Node("D", 18, 15))
+    AddNode(G, Node("E", 2, 4))
+    AddNode(G, Node("F", 6, 5))
+    AddNode(G, Node("G", 12, 12))
+    AddNode(G, Node("H", 10, 3))
+    AddNode(G, Node("I", 19, 1))
+    AddNode(G, Node("J", 13, 5))
+    AddNode(G, Node("K", 3, 15))
+    AddNode(G, Node("L", 4, 10))
 
-    def Plot(self):
+    AddSegment(G, "AB", "A", "B")
+    AddSegment(G, "AE", "A", "E")
+    AddSegment(G, "AK", "A", "K")
+    AddSegment(G, "BA", "B", "A")
+    AddSegment(G, "BC", "B", "C")
+    AddSegment(G, "BF", "B", "F")
+    AddSegment(G, "BK", "B", "K")
+    AddSegment(G, "BG", "B", "G")
+    AddSegment(G, "CD", "C", "D")
+    AddSegment(G, "CG", "C", "G")
+    AddSegment(G, "DG", "D", "G")
+    AddSegment(G, "DH", "D", "H")
+    AddSegment(G, "DI", "D", "I")
+    AddSegment(G, "EF", "E", "F")
+    AddSegment(G, "FL", "F", "L")
+    AddSegment(G, "GB", "G", "B")
+    AddSegment(G, "GF", "G", "F")
+    AddSegment(G, "GH", "G", "H")
+    AddSegment(G, "ID", "I", "D")
+    AddSegment(G, "IJ", "I", "J")
+    AddSegment(G, "JI", "J", "I")
+    AddSegment(G, "KA", "K", "A")
+    AddSegment(G, "KL", "K", "L")
+    AddSegment(G, "LK", "L", "K")
+    AddSegment(G, "LF", "L", "F")
+    return G
 
-        for segment in self.segments:
-            plt.plot([segment.origin.x, segment.destination.x], [segment.origin.y, segment.destination.y], 'r-')
-            mid_x = (segment.origin.x + segment.destination.x) / 2
-            mid_y = (segment.origin.y + segment.destination.y) / 2
-            plt.text(mid_x, mid_y, f'{segment.cost:.2f}', color='blue', fontsize=8, ha='center', va='center')
-
-        for node in self.nodes:
-            plt.scatter(node.x, node.y, color='gray')
-            plt.text(node.x, node.y, node.name, color='black', fontsize=10, ha='center', va='center')
-
-        plt.show()
-
-    def PlotNode(self, nameOrigin):
-
-        origin = None
-        for node in self.nodes:
-            if node.name == nameOrigin:
-                origin = node
-                break
-
-        if origin is None:
-            return False
-
-        for segment in self.segments:
-            if segment.origin == origin:
-                plt.plot([segment.origin.x, segment.destination.x], [segment.origin.y, segment.destination.y], 'r-')
-                mid_x = (segment.origin.x + segment.destination.x) / 2
-                mid_y = (segment.origin.y + segment.destination.y) / 2
-                plt.text(mid_x, mid_y, f'{segment.cost:.2f}', color='blue', fontsize=8, ha='center', va='center')
-
-        for node in self.nodes:
-            if node == origin:
-                plt.scatter(node.x, node.y, color='blue')
-            elif node in origin.neighbors:
-                plt.scatter(node.x, node.y, color='green')
-            else:
-                plt.scatter(node.x, node.y, color='gray')
-
-            plt.text(node.x, node.y, node.name, color='black', fontsize=10, ha='center', va='center')
-
-        plt.show()
-        return True
-
-
-    def CreateGraphFromFile(filename):
-
-        G = Graph()
-
-        with open(filename, 'r') as f:
-            lines = f.readlines()
-
-        # Primero, leemos los nodos
-        for line in lines:
-            parts = line.strip().split()
-            if parts[0] == "NODO":
-                name = parts[1]
-                x = float(parts[2])
-                y = float(parts[3])
-                G.AddNode(Node(name, x, y))
-
-        # Luego, leemos los segmentos
-        for line in lines:
-            parts = line.strip().split()
-            if parts[0] == "SEGMENTO":
-                G.AddSegment(parts[1], parts[2])
-
-        return G
+def CreateGraph_2():
+    return LoadGraphFromFile("graph_data.txt")

@@ -1,14 +1,11 @@
-
-
-from node import Node  # Importamos la clase Node de node.py
+from node import Node
 
 class Segment:
     def __init__(self, name, origin, destination):
-        self.name = name  # Nombre del segmento
-        self.origin = origin  # Nodo de origen (instancia de Node)
-        self.destination = destination  # Nodo de destino (instancia de Node)
-        self.cost = origin.Distance(destination)  # Calcula el costo como la distancia entre los nodos
+        self.name = name
+        self.origin = origin
+        self.destination = destination  # <-- ESTA LÍNEA ES CLAVE
+        self.cost = origin.Distance(destination)
 
     def __repr__(self):
-        # Representación legible del objeto
-        return f"Segment(name={self.name}, origin={self.origin.name}, destination={self.destination.name}, cost={self.cost})"
+        return f"Segment(name={self.name}, origin={self.origin.name}, destination={self.destination.name}, cost={self.cost:.2f})"

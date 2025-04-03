@@ -1,137 +1,176 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import filedialog, messagebox, simpledialog
+from graph import *
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
 
-class Node:
-    def __init__(self, name, x, y):
-        self.name = name
-        self.x = x
-        self.y = y
-        self.neighbors = []  # Lista de nodos vecinos
+# Variables globales
+current_graph = None
+canvas = None
+fig = None
+ax = None
+selected_nodes = []
+modo = "navegar"  # modos: "nodo", "segmento", "vecinos"
 
-    def add_neighbor(self, node):
-        """Añade un nodo a la lista de vecinos si no está ya en la lista."""
-        if node not in self.neighbors:
-            self.neighbors.append(node)
+# Ventana principal
+root = tk.Tk()
+root.title("Interfaz de Grafos")
+root.geometry("700x700")
 
+frame_buttons = tk.Frame(root)
+frame_buttons.pack(pady=10)
 
-class Graph:
-    def __init__(self):
-        self.nodes = []  # Lista de nodos
-        self.edges = []  # Lista de segmentos
+frame_plot = tk.Frame(root)
+frame_plot.pack(fill=tk.BOTH, expand=True)
 
-    def add_node(self, node):
-        """Añade un nodo al grafo."""
-        self.nodes.append(node)
+def set_modo(nuevo_modo):
+    global modo, selected_nodes
+    modo = nuevo_modo
+    selected_nodes.clear()
+    messagebox.showinfo("Modo activado", f"Modo '{modo}' activado.\nHaz clic sobre el grafo.")
 
-    def add_edge(self, node1, node2):
-        """Añade un segmento entre dos nodos."""
-        node1.add_neighbor(node2)
-        node2.add_neighbor(node1)
-        self.edges.append((node1, node2))
+def plot_interactive_graph(g):
+    global fig, ax, canvas, selected_nodes, current_graph
+    selected_nodes = []
 
+    if canvas:
+        canvas.get_tk_widget().destroy()
 
-class GraphApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Graph Visualization")
+    fig, ax = plt.subplots()
+    ax.set_title(f"Modo activo: {modo.upper()}")
+    ax.grid(True, color='red', linestyle='--')
 
-        self.graph = Graph()
+    for node in g.nodes:
+        ax.plot(node.x, node.y, 'o', color='gray')
+        ax.text(node.x + 0.2, node.y + 0.2, node.name)
 
-        # Crear el lienzo donde dibujaremos el grafo
-        self.canvas = tk.Canvas(self.root, width=800, height=600, bg="white")
-        self.canvas.pack()
+    for segment in g.segments:
+        x = [segment.origin.x, segment.destination.x]
+        y = [segment.origin.y, segment.destination.y]
+        ax.plot(x, y, 'b-')
+        mx = (x[0] + x[1]) / 2
+        my = (y[0] + y[1]) / 2
+        ax.text(mx, my, f"{segment.cost:.2f}", color='blue', fontsize=8)
 
-        # Crear algunos nodos y segmentos
-        self.create_sample_graph()
+    def find_closest_node(x, y):
+        return min(g.nodes, key=lambda n: ((n.x - x) ** 2 + (n.y - y) ** 2) ** 0.5)
 
-        # Añadir un botón para mostrar los nodos y sus vecinos
-        self.button = tk.Button(self.root, text="Select Node", command=self.select_node)
-        self.button.pack()
+    def on_click(event):
+        if not event.inaxes:
+            return
+        x, y = event.xdata, event.ydata
 
-    def create_sample_graph(self):
-        """Crea un grafo de ejemplo."""
-        # Crear nodos
-        node_a = Node("A", 100, 100)
-        node_b = Node("B", 200, 200)
-        node_c = Node("C", 300, 300)
+        if modo == "nodo":
+            name = simpledialog.askstring("Nuevo nodo", "Nombre del nodo:")
+            if name:
+                AddNode(current_graph, Node(name, x, y))
+                plot_interactive_graph(current_graph)
 
-        # Añadir nodos al grafo
-        self.graph.add_node(node_a)
-        self.graph.add_node(node_b)
-        self.graph.add_node(node_c)
+        elif modo == "segmento":
+            closest = find_closest_node(x, y)
+            selected_nodes.append(closest)
+            if len(selected_nodes) == 2:
+                name = simpledialog.askstring("Nombre del segmento", "Introduce nombre del segmento:")
+                if name:
+                    AddSegment(current_graph, name, selected_nodes[0].name, selected_nodes[1].name)
+                selected_nodes.clear()
+                plot_interactive_graph(current_graph)
 
-        # Crear segmentos
-        self.graph.add_edge(node_a, node_b)
-        self.graph.add_edge(node_b, node_c)
+        elif modo == "vecinos":
+            closest = find_closest_node(x, y)
+            plot_neighbors(current_graph, closest)
 
-        # Dibujar el grafo
-        self.draw_graph()
+        elif event.button == 3:  # clic derecho
+            closest = find_closest_node(x, y)
+            if messagebox.askyesno("Eliminar nodo", f"¿Eliminar nodo '{closest.name}'?"):
+                RemoveNode(current_graph, closest.name)
+                plot_interactive_graph(current_graph)
 
-    def draw_graph(self):
-        """Dibuja los nodos y los segmentos en el lienzo."""
-        self.canvas.delete("all")  # Limpiar el lienzo
+    fig.canvas.mpl_connect("button_press_event", on_click)
 
-        # Dibujar los segmentos
-        for node1, node2 in self.graph.edges:
-            self.canvas.create_line(node1.x, node1.y, node2.x, node2.y, fill="black")
+    canvas = FigureCanvasTkAgg(fig, master=frame_plot)
+    canvas.draw()
+    canvas.get_tk_widget().pack()
 
-        # Dibujar los nodos
-        for node in self.graph.nodes:
-            self.canvas.create_oval(
-                node.x - 10, node.y - 10, node.x + 10, node.y + 10, fill="blue", outline="black"
-            )
-            self.canvas.create_text(node.x, node.y, text=node.name, fill="white")
+def plot_neighbors(g, node):
+    global fig, ax, canvas
 
-    def select_node(self):
-        """Permite al usuario seleccionar un nodo para ver sus vecinos."""
-        def on_click(event):
-            x, y = event.x, event.y
-            clicked_node = self.get_node_at_position(x, y)
-            if clicked_node:
-                self.highlight_node_and_neighbors(clicked_node)
+    if canvas:
+        canvas.get_tk_widget().destroy()
 
-        self.canvas.bind("<Button-1>", on_click)
+    fig, ax = plt.subplots()
+    ax.set_title(f"Vecinos de {node.name}")
+    ax.grid(True, color='red', linestyle='--')
 
-    def get_node_at_position(self, x, y):
-        """Devuelve el nodo que se encuentra en la posición clickeada."""
-        for node in self.graph.nodes:
-            if (x - node.x) ** 2 + (y - node.y) ** 2 <= 10 ** 2:  # Radio de 10px
-                return node
-        return None
+    for n in g.nodes:
+        color = 'gray'
+        if n == node:
+            color = 'blue'
+        elif n in node.neighbors:
+            color = 'green'
+        ax.plot(n.x, n.y, 'o', color=color)
+        ax.text(n.x + 0.2, n.y + 0.2, n.name)
 
-    def highlight_node_and_neighbors(self, node):
-        """Resalta el nodo seleccionado y sus vecinos."""
-        self.canvas.delete("all")  # Limpiar el lienzo
+    for segment in g.segments:
+        if segment.origin == node and segment.destination in node.neighbors:
+            x = [segment.origin.x, segment.destination.x]
+            y = [segment.origin.y, segment.destination.y]
+            ax.plot(x, y, 'r-')
+            mx = (x[0] + x[1]) / 2
+            my = (y[0] + y[1]) / 2
+            ax.text(mx, my, f"{segment.cost:.2f}", color='red', fontsize=8)
+        else:
+            x = [segment.origin.x, segment.destination.x]
+            y = [segment.origin.y, segment.destination.y]
+            ax.plot(x, y, 'b-', alpha=0.2)
 
-        # Dibujar los segmentos
-        for node1, node2 in self.graph.edges:
-            color = "black"
-            if node == node1 or node == node2:
-                color = "red"  # Resaltar los segmentos relacionados con el nodo
-            self.canvas.create_line(node1.x, node1.y, node2.x, node2.y, fill=color)
+    canvas = FigureCanvasTkAgg(fig, master=frame_plot)
+    canvas.draw()
+    canvas.get_tk_widget().pack()
 
-        # Dibujar los nodos y resaltar los vecinos
-        for n in self.graph.nodes:
-            color = "blue"
-            if n == node:
-                color = "green"  # Resaltar el nodo seleccionado
-            elif n in node.neighbors:
-                color = "yellow"  # Resaltar los vecinos
+def load_graph_from_file():
+    global current_graph
+    path = filedialog.askopenfilename()
+    if path:
+        current_graph = LoadGraphFromFile(path)
+        plot_interactive_graph(current_graph)
 
-            self.canvas.create_oval(
-                n.x - 10, n.y - 10, n.x + 10, n.y + 10, fill=color, outline="black"
-            )
-            self.canvas.create_text(n.x, n.y, text=n.name, fill="white")
+def load_example_graph():
+    global current_graph
+    current_graph = CreateGraph_1()
+    plot_interactive_graph(current_graph)
 
+def load_graph_2():
+    global current_graph
+    current_graph = CreateGraph_2()
+    plot_interactive_graph(current_graph)
 
-def run():
-    root = tk.Tk()
-    app = GraphApp(root)
-    root.mainloop()
+def nuevo_grafo():
+    global current_graph
+    current_graph = Graph()
+    plot_interactive_graph(current_graph)
 
+def guardar_grafo():
+    global current_graph
+    if not current_graph:
+        return
+    path = filedialog.asksaveasfilename(defaultextension=".txt")
+    if path:
+        SaveGraphToFile(current_graph, path)
+        messagebox.showinfo("Éxito", "Grafo guardado correctamente.")
 
-if __name__ == "__main__":
-    run()
+# Botones principales
+tk.Button(frame_buttons, text="Cargar Grafo desde Archivo", command=load_graph_from_file, width=30).pack(pady=5)
+tk.Button(frame_buttons, text="Mostrar Grafo Ejemplo", command=load_example_graph, width=30).pack(pady=5)
+tk.Button(frame_buttons, text="Mostrar Mi Grafo (graph_data.txt)", command=load_graph_2, width=30).pack(pady=5)
+tk.Button(frame_buttons, text="Nuevo Grafo (Vacío)", command=nuevo_grafo, width=30).pack(pady=5)
+tk.Button(frame_buttons, text="Guardar Grafo en Archivo", command=guardar_grafo, width=30).pack(pady=5)
 
+# Modos interactivos
+tk.Label(frame_buttons, text="Modo de clic:").pack(pady=(10,0))
+tk.Button(frame_buttons, text="➕ Añadir Nodo", command=lambda: set_modo("nodo"), width=30).pack(pady=2)
+tk.Button(frame_buttons, text="🔗 Añadir Segmento", command=lambda: set_modo("segmento"), width=30).pack(pady=2)
+tk.Button(frame_buttons, text="👁️ Ver Vecinos", command=lambda: set_modo("vecinos"), width=30).pack(pady=2)
 
-
+# Iniciar interfaz
+root.mainloop()
