@@ -1,8 +1,6 @@
-
 import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox
 from graph import *
-from path import PlotPath
 from graph import FindShortestPath
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
@@ -68,20 +66,7 @@ def on_click(event):
         name = simpledialog.askstring("Nombre del nodo", "Nombre del nodo:")
         if name:
             AddNode(current_graph, Node(name, x, y))
-            for n in current_graph.nodes:
-                n.neighbors = []
-            for seg in current_graph.segments:
-                o = next((n for n in current_graph.nodes if n.name == seg.origin.name), None)
-                d = next((n for n in current_graph.nodes if n.name == seg.destination.name), None)
-                if o and d:
-                    o.AddNeighbor(d)
-            for n in current_graph.nodes:
-                n.neighbors = []
-            for seg in current_graph.segments:
-                o = next((n for n in current_graph.nodes if n.name == seg.origin.name), None)
-                d = next((n for n in current_graph.nodes if n.name == seg.destination.name), None)
-                if o and d:
-                    o.AddNeighbor(d)
+            actualizar_vecinos()
             plot_graph(current_graph)
         return
 
@@ -95,13 +80,7 @@ def on_click(event):
             name = simpledialog.askstring("Nombre del segmento", "Nombre del segmento:")
             if name:
                 AddSegment(current_graph, name, selected_nodes[0].name, selected_nodes[1].name)
-                for n in current_graph.nodes:
-                    n.neighbors = []
-                for seg in current_graph.segments:
-                    o = next((n for n in current_graph.nodes if n.name == seg.origin.name), None)
-                    d = next((n for n in current_graph.nodes if n.name == seg.destination.name), None)
-                    if o and d:
-                        o.AddNeighbor(d)
+                actualizar_vecinos()
             selected_nodes.clear()
             plot_graph(current_graph)
 
@@ -113,7 +92,7 @@ def on_click(event):
         if len(selected_nodes) == 2:
             path = FindShortestPath(current_graph, selected_nodes[0].name, selected_nodes[1].name)
             if path:
-                PlotPath(current_graph, path)
+                plot_path(current_graph, path)
             else:
                 messagebox.showinfo("Sin camino", "No existe un camino entre los nodos seleccionados.")
             selected_nodes.clear()
@@ -124,38 +103,60 @@ def on_click(event):
     elif event.button == 3:
         if messagebox.askyesno("Eliminar nodo", f"¿Eliminar nodo '{nodo.name}'?"):
             RemoveNode(current_graph, nodo.name)
+            actualizar_vecinos()
             plot_graph(current_graph)
 
-
-def plot_neighbors(g, node):
-    for n in g.nodes:
+def actualizar_vecinos():
+    for n in current_graph.nodes:
         n.neighbors = []
-    for seg in g.segments:
-        o = next((n for n in g.nodes if n.name == seg.origin.name), None)
-        d = next((n for n in g.nodes if n.name == seg.destination.name), None)
+    for seg in current_graph.segments:
+        o = next((n for n in current_graph.nodes if n.name == seg.origin.name), None)
+        d = next((n for n in current_graph.nodes if n.name == seg.destination.name), None)
         if o and d:
             o.AddNeighbor(d)
-    vecinos = set(n.name for n in node.neighbors)
 
-
+def plot_path(g, path):
     global fig, ax, canvas
     if canvas:
         canvas.get_tk_widget().destroy()
+    fig, ax = plt.subplots()
+    ax.set_title(f"Camino más corto (coste: {path.cost:.2f})")
+    ax.grid(True, linestyle='--', color='lightgray')
+    for seg in g.segments:
+        x = [seg.origin.x, seg.destination.x]
+        y = [seg.origin.y, seg.destination.y]
+        ax.plot(x, y, 'gray', alpha=0.3)
+    for i in range(len(path.nodes) - 1):
+        x = [path.nodes[i].x, path.nodes[i+1].x]
+        y = [path.nodes[i].y, path.nodes[i+1].y]
+        ax.annotate('', xy=(x[1], y[1]), xytext=(x[0], y[0]),
+                    arrowprops=dict(facecolor='red', edgecolor='red', shrink=0.05, width=1.5, headwidth=8))
+    for n in g.nodes:
+        color = 'blue' if n == path.nodes[0] else 'green' if n == path.nodes[-1] else 'gray'
+        ax.plot(n.x, n.y, 'o', color=color)
+        ax.text(n.x + 0.2, n.y + 0.2, n.name)
+    canvas = FigureCanvasTkAgg(fig, master=frame_plot)
+    canvas.draw()
+    canvas.get_tk_widget().pack()
+    fig.canvas.mpl_connect("button_press_event", on_click)
 
+def plot_neighbors(g, node):
+    actualizar_vecinos()
+    vecinos = set(n.name for n in node.neighbors)
+    global fig, ax, canvas
+    if canvas:
+        canvas.get_tk_widget().destroy()
     fig, ax = plt.subplots()
     ax.set_title(f"Vecinos de {node.name}")
-
     for seg in g.segments:
         x = [seg.origin.x, seg.destination.x]
         y = [seg.origin.y, seg.destination.y]
         color = 'red' if seg.origin.name == node.name else 'gray'
         ax.plot(x, y, color)
-
     for n in g.nodes:
         color = 'blue' if n.name == node.name else 'green' if n.name in vecinos else 'gray'
         ax.plot(n.x, n.y, 'o', color=color)
         ax.text(n.x + 0.2, n.y + 0.2, n.name)
-
     canvas = FigureCanvasTkAgg(fig, master=frame_plot)
     canvas.draw()
     canvas.get_tk_widget().pack()
@@ -164,27 +165,17 @@ def plot_neighbors(g, node):
 def plot_reachability(g, node):
     visited = set()
     queue = deque([node])
-    for n in g.nodes:
-        n.neighbors = []
-    for seg in g.segments:
-        o = next((n for n in g.nodes if n.name == seg.origin.name), None)
-        d = next((n for n in g.nodes if n.name == seg.destination.name), None)
-        if o and d:
-            o.AddNeighbor(d)
+    actualizar_vecinos()
     while queue:
         actual = queue.popleft()
         if actual.name not in visited:
             visited.add(actual.name)
             queue.extend(nb for nb in actual.neighbors if nb.name not in visited)
-
-
     global fig, ax, canvas
     if canvas:
         canvas.get_tk_widget().destroy()
-
     fig, ax = plt.subplots()
     ax.set_title(f"Alcanzables desde {node.name}")
-
     for seg in g.segments:
         x = [seg.origin.x, seg.destination.x]
         y = [seg.origin.y, seg.destination.y]
@@ -192,12 +183,10 @@ def plot_reachability(g, node):
             ax.plot(x, y, 'green')
         else:
             ax.plot(x, y, 'gray', alpha=0.2)
-
     for n in g.nodes:
         color = 'blue' if n.name == node.name else 'green' if n.name in visited else 'gray'
         ax.plot(n.x, n.y, 'o', color=color)
         ax.text(n.x + 0.2, n.y + 0.2, n.name)
-
     canvas = FigureCanvasTkAgg(fig, master=frame_plot)
     canvas.draw()
     canvas.get_tk_widget().pack()
@@ -213,13 +202,7 @@ def cargar():
             current_graph = CreateGraph_1()
         else:
             current_graph = LoadGraphFromFile(path)
-        for n in current_graph.nodes:
-            n.neighbors = []
-        for seg in current_graph.segments:
-            o = next((n for n in current_graph.nodes if n.name == seg.origin.name), None)
-            d = next((n for n in current_graph.nodes if n.name == seg.destination.name), None)
-            if o and d:
-                o.AddNeighbor(d)
+        actualizar_vecinos()
         plot_graph(current_graph)
 
 def nuevo():
@@ -243,15 +226,8 @@ def mostrar_ejemplo(nombre_archivo):
         current_graph = CreateGraph_1()
     else:
         current_graph = LoadGraphFromFile(nombre_archivo)
-    for n in current_graph.nodes:
-        n.neighbors = []
-    for seg in current_graph.segments:
-        o = next((n for n in current_graph.nodes if n.name == seg.origin.name), None)
-        d = next((n for n in current_graph.nodes if n.name == seg.destination.name), None)
-        if o and d:
-            o.AddNeighbor(d)
+    actualizar_vecinos()
     plot_graph(current_graph)
-
 
 tk.Button(frame_buttons, text="📊 Mostrar Grafo de Ejemplo", command=lambda: mostrar_ejemplo("graph_example.txt"), width=30).pack(pady=3)
 tk.Button(frame_buttons, text="📊 Mostrar Mi Grafo Guardado", command=lambda: mostrar_ejemplo("graph_data.txt"), width=30).pack(pady=3)
