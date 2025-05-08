@@ -1,6 +1,7 @@
 from node import Node
 from segment import Segment
-from path import Path, AddNodeToPath, ContainsNode
+from path import Path
+import heapq
 
 class Graph:
     def __init__(self):
@@ -19,13 +20,15 @@ def AddSegment(g: Graph, name: str, nameOrigin: str, nameDestination: str) -> bo
     if origin is None or destination is None:
         return False
 
-
-    segment = Segment(name, origin, destination)
+    cost = origin.Distance(destination)
+    segment = Segment(name, origin, destination, cost)
     g.segments.append(segment)
 
-
+    # Conexión bidireccional
     if destination not in origin.neighbors:
         origin.neighbors.append(destination)
+    if origin not in destination.neighbors:
+        destination.neighbors.append(origin)
 
     return True
 
@@ -77,30 +80,35 @@ def FindShortestPath(G: Graph, origin: str, destination: str) -> Path | None:
     if not start or not end:
         return None
 
-    current_paths = []
-    initial_path = Path()
-    AddNodeToPath(initial_path, start)
-    current_paths.append(initial_path)
+    dist = {n: float('inf') for n in G.nodes}
+    prev = {n: None for n in G.nodes}
+    dist[start] = 0
 
-    while current_paths:
-        best_path = min(current_paths, key=lambda p: p.cost + p.nodes[-1].Distance(end))
-        current_paths.remove(best_path)
-        last_node = best_path.nodes[-1]
+    queue = [(0, start)]
 
-        for neighbor in last_node.neighbors:
-            if ContainsNode(best_path, neighbor):
-                continue
-            cost = last_node.Distance(neighbor)
-            new_path = Path()
-            new_path.nodes = best_path.nodes.copy()
-            new_path.cost = best_path.cost
-            AddNodeToPath(new_path, neighbor, cost)
+    while queue:
+        current_dist, current = heapq.heappop(queue)
+        if current == end:
+            break
+        for seg in G.segments:
+            if seg.origin == current:
+                neighbor = seg.destination
+                alt = current_dist + seg.cost
+                if alt < dist[neighbor]:
+                    dist[neighbor] = alt
+                    prev[neighbor] = current
+                    heapq.heappush(queue, (alt, neighbor))
 
-            if neighbor == end:
-                return new_path
-            current_paths.append(new_path)
+    if dist[end] == float('inf'):
+        return None
 
-    return None
+    path_nodes = []
+    current = end
+    while current:
+        path_nodes.insert(0, current)
+        current = prev[current]
+
+    return Path(path_nodes, dist[end])
 
 def CreateGraph_1() -> Graph:
     G = Graph()
@@ -118,12 +126,15 @@ def CreateGraph_1() -> Graph:
     AddNode(G, Node("L", 4, 10))
 
     segments = [
-        ("AB", "A", "B"), ("AE", "A", "E"), ("AK", "A", "K"), ("BA", "B", "A"),
+        ("AB", "A", "B"), ("AE", "A", "E"), ("AK", "A", "K"),
         ("BC", "B", "C"), ("BF", "B", "F"), ("BK", "B", "K"), ("BG", "B", "G"),
-        ("CD", "C", "D"), ("CG", "C", "G"), ("DG", "D", "G"), ("DH", "D", "H"),
-        ("DI", "D", "I"), ("EF", "E", "F"), ("FL", "F", "L"), ("GB", "G", "B"),
-        ("GF", "G", "F"), ("GH", "G", "H"), ("ID", "I", "D"), ("IJ", "I", "J"),
-        ("JI", "J", "I"), ("KA", "K", "A"), ("KL", "K", "L"), ("LK", "L", "K"), ("LF", "L", "F")
+        ("CD", "C", "D"), ("CG", "C", "G"),
+        ("DG", "D", "G"), ("DH", "D", "H"), ("DI", "D", "I"),
+        ("EF", "E", "F"),
+        ("FL", "F", "L"),
+        ("GF", "G", "F"), ("GH", "G", "H"),
+        ("IJ", "I", "J"),
+        ("KA", "K", "A"), ("KL", "K", "L"), ("LF", "L", "F")
     ]
     for name, o, d in segments:
         AddSegment(G, name, o, d)

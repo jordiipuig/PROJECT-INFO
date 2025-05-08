@@ -3,18 +3,31 @@
 import math
 
 class Node:
-    def __init__(self, name, x, y):
+    def __init__(self, name, x=0, y=0):
         self.name = name
-        self.x = x        # X
-        self.y = y        #  Y
+        self.x = x
+        self.y = y
         self.neighbors = []
-    def AddNeighbor(self, n2):
 
-        if n2 not in self.neighbors:
-            self.neighbors.append(n2)
-            return True
-        return False
+    def Distance(self, other):
+        return ((self.x - other.x) ** 2 + (self.y - other.y) ** 2) ** 0.5
 
-    def Distance(self, n2):
+    def __eq__(self, other):
+        return isinstance(other, Node) and self.name == other.name
 
-        return math.sqrt((self.x - n2.x) ** 2 + (self.y - n2.y) ** 2)
+    def __hash__(self):
+        return hash(self.name)
+
+    def __lt__(self, other):  # ✅ necesario para heapq si hay empate de costes
+        return self.name < other.name
+
+    def AddNeighbor(self, neighbor):
+        if neighbor not in self.neighbors:
+            self.neighbors.append(neighbor)
+
+
+
+
+
+    def __repr__(self):
+        return f"Node({self.name})"

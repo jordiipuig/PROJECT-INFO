@@ -2,9 +2,10 @@ from node import Node
 import matplotlib.pyplot as plt
 
 class Path:
-    def __init__(self):
-        self.nodes = []
-        self.cost = 0.0
+    def __init__(self, nodes=None, cost=0.0):
+        self.nodes = nodes if nodes is not None else []
+        self.cost = cost
+
 
 def AddNodeToPath(path: Path, node: Node, cost: float = 0.0) -> None:
     path.nodes.append(node)
