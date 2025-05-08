@@ -1,27 +1,74 @@
 import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox
-from graph import *
-from graph import FindShortestPath
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
-from collections import deque
+from airSpace import AirSpace
+import os
 
-current_graph = None
+root = tk.Tk()
+root.title("Visualizador del Espacio Aéreo")
+root.geometry("1100x800")
+
+frame_buttons = tk.Frame(root)
+frame_buttons.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
+
+frame_plot = tk.Frame(root)
+frame_plot.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+airspace = AirSpace()
 canvas = None
 fig = None
 ax = None
-selected_nodes = []
 modo = "navegar"
+selected_nodes = []
+mostrar_costes = True
+mostrar_nombres = True
 
-root = tk.Tk()
-root.title("Gestor Visual de Grafos")
-root.geometry("900x800")
+def plot_airspace(highlight_nodes=None, highlight_edges=None, title="Espacio aéreo"):
+    global canvas, fig, ax
+    if canvas:
+        canvas.get_tk_widget().destroy()
+    fig, ax = plt.subplots()
+    ax.set_title(title)
+    ax.grid(True, linestyle='--', color='lightgray')
+    ax.set_aspect('equal', adjustable='datalim')
 
-frame_buttons = tk.Frame(root)
-frame_buttons.pack(pady=10)
+    highlight_nodes = highlight_nodes or []
+    highlight_edges = highlight_edges or []
 
-frame_plot = tk.Frame(root)
-frame_plot.pack(fill=tk.BOTH, expand=True)
+    for seg in airspace.navsegments:
+        p1 = airspace.navpoints_by_number.get(seg.origin_number)
+        p2 = airspace.navpoints_by_number.get(seg.destination_number)
+        if not p1 or not p2:
+            continue
+        x = [p1.longitude, p2.longitude]
+        y = [p1.latitude, p2.latitude]
+        color = 'green' if (p1, p2) in highlight_edges else 'gray'
+        if (p1, p2) in highlight_edges:
+            ax.annotate('', xy=(x[1], y[1]), xytext=(x[0], y[0]),
+                        arrowprops=dict(facecolor='red', edgecolor='red', arrowstyle='->', lw=1.5))
+        else:
+            ax.plot(x, y, color)
+        if mostrar_costes:
+            mx = (x[0] + x[1]) / 2
+            my = (y[0] + y[1]) / 2
+            ax.text(mx, my, f"{seg.distance:.1f}", fontsize=8)
+
+    for p in airspace.navpoints:
+        color = 'red' if p in highlight_nodes else 'steelblue'
+        ax.plot(p.longitude, p.latitude, 'o', color=color)
+        if mostrar_nombres:
+            ax.text(p.longitude + 0.2, p.latitude + 0.2, p.name, fontsize=8)
+
+    canvas = FigureCanvasTkAgg(fig, master=frame_plot)
+    canvas.draw()
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+    fig.canvas.mpl_connect("button_press_event", on_click)
+    fig.canvas.mpl_connect("scroll_event", on_scroll)
+
+def cargar_espacio_aereo(nav_path, seg_path, aer_path, titulo):
+    airspace.load_from_files(nav_path, seg_path, aer_path)
+    plot_airspace(title=titulo)
 
 def set_modo(nuevo_modo):
     global modo, selected_nodes
@@ -29,216 +76,194 @@ def set_modo(nuevo_modo):
     selected_nodes.clear()
     messagebox.showinfo("Modo activado", f"Modo '{modo}' activado.\nHaz clic sobre el grafo.")
 
-def find_closest_node(x, y):
-    if not current_graph or not current_graph.nodes:
+def find_closest_point(x, y):
+    if not airspace.navpoints:
         return None
-    return min(current_graph.nodes, key=lambda n: ((n.x - x)**2 + (n.y - y)**2)**0.5)
-
-def plot_graph(g):
-    global fig, ax, canvas
-    if canvas:
-        canvas.get_tk_widget().destroy()
-    fig, ax = plt.subplots()
-    ax.set_title("Grafo Actual")
-    ax.grid(True, linestyle='--', color='lightgray')
-    for seg in g.segments:
-        x = [seg.origin.x, seg.destination.x]
-        y = [seg.origin.y, seg.destination.y]
-        ax.plot(x, y, 'gray')
-        mx = (x[0] + x[1]) / 2
-        my = (y[0] + y[1]) / 2
-        ax.text(mx, my, f"{seg.cost:.1f}", fontsize=8)
-    for n in g.nodes:
-        ax.plot(n.x, n.y, 'o', color='steelblue')
-        ax.text(n.x + 0.2, n.y + 0.2, n.name, fontsize=9)
-    canvas = FigureCanvasTkAgg(fig, master=frame_plot)
-    canvas.draw()
-    canvas.get_tk_widget().pack()
-    fig.canvas.mpl_connect("button_press_event", on_click)
+    return min(airspace.navpoints, key=lambda p: ((p.longitude - x)**2 + (p.latitude - y)**2)**0.5)
 
 def on_click(event):
     global modo, selected_nodes
-    if not event.inaxes or current_graph is None:
+    if not event.inaxes or not airspace.navpoints:
         return
     x, y = event.xdata, event.ydata
 
     if modo == "nodo":
         name = simpledialog.askstring("Nombre del nodo", "Nombre del nodo:")
         if name:
-            AddNode(current_graph, Node(name, x, y))
-            actualizar_vecinos()
-            plot_graph(current_graph)
+            number = max(p.number for p in airspace.navpoints) + 1
+            new_point = airspace.create_point(number, name, y, x)
+            plot_airspace()
         return
 
-    nodo = find_closest_node(x, y)
-    if nodo is None:
+    point = find_closest_point(x, y)
+    if point is None:
         return
 
     if modo == "segmento":
-        selected_nodes.append(nodo)
+        selected_nodes.append(point)
         if len(selected_nodes) == 2:
-            name = simpledialog.askstring("Nombre del segmento", "Nombre del segmento:")
-            if name:
-                AddSegment(current_graph, name, selected_nodes[0].name, selected_nodes[1].name)
-                actualizar_vecinos()
+            airspace.create_segment(selected_nodes[0], selected_nodes[1])
             selected_nodes.clear()
-            plot_graph(current_graph)
+            plot_airspace()
 
     elif modo == "vecinos":
-        plot_neighbors(current_graph, nodo)
+        mostrar_vecinos_manual(point)
 
     elif modo == "camino":
-        selected_nodes.append(nodo)
+        selected_nodes.append(point)
         if len(selected_nodes) == 2:
-            path = FindShortestPath(current_graph, selected_nodes[0].name, selected_nodes[1].name)
-            if path:
-                plot_path(current_graph, path)
+            camino, coste = airspace.shortest_path(selected_nodes[0], selected_nodes[1])
+            if not camino:
+                messagebox.showinfo("Sin camino", "No hay camino posible entre esos puntos.")
             else:
-                messagebox.showinfo("Sin camino", "No existe un camino entre los nodos seleccionados.")
+                edges = [(camino[i], camino[i+1]) for i in range(len(camino)-1)]
+                messagebox.showinfo("Camino", f"{camino[0].name} → {camino[-1].name}\nCoste total: {coste:.2f} km")
+                plot_airspace(highlight_nodes=camino, highlight_edges=edges, title="Camino más corto")
             selected_nodes.clear()
 
     elif modo == "alcanzabilidad":
-        plot_reachability(current_graph, nodo)
+        mostrar_alcanzables_manual(point)
+
+    elif modo == "sidsstars":
+        mostrar_sids_stars()
 
     elif event.button == 3:
-        if messagebox.askyesno("Eliminar nodo", f"¿Eliminar nodo '{nodo.name}'?"):
-            RemoveNode(current_graph, nodo.name)
-            actualizar_vecinos()
-            plot_graph(current_graph)
+        if messagebox.askyesno("Eliminar nodo", f"¿Eliminar nodo '{point.name}'?"):
+            airspace.delete_point(point.number)
+            plot_airspace()
 
-def actualizar_vecinos():
-    for n in current_graph.nodes:
-        n.neighbors = []
-    for seg in current_graph.segments:
-        o = next((n for n in current_graph.nodes if n.name == seg.origin.name), None)
-        d = next((n for n in current_graph.nodes if n.name == seg.destination.name), None)
-        if o and d:
-            o.AddNeighbor(d)
+def on_scroll(event):
+    base_scale = 1.1
+    ax = event.canvas.figure.axes[0]
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    xdata = event.xdata
+    ydata = event.ydata
 
-def plot_path(g, path):
-    global fig, ax, canvas
-    if canvas:
-        canvas.get_tk_widget().destroy()
-    fig, ax = plt.subplots()
-    ax.set_title(f"Camino más corto (coste: {path.cost:.2f})")
-    ax.grid(True, linestyle='--', color='lightgray')
-    for seg in g.segments:
-        x = [seg.origin.x, seg.destination.x]
-        y = [seg.origin.y, seg.destination.y]
-        ax.plot(x, y, 'gray', alpha=0.3)
-    for i in range(len(path.nodes) - 1):
-        x = [path.nodes[i].x, path.nodes[i+1].x]
-        y = [path.nodes[i].y, path.nodes[i+1].y]
-        ax.annotate('', xy=(x[1], y[1]), xytext=(x[0], y[0]),
-                    arrowprops=dict(facecolor='red', edgecolor='red', shrink=0.05, width=1.5, headwidth=8))
-    for n in g.nodes:
-        color = 'blue' if n == path.nodes[0] else 'green' if n == path.nodes[-1] else 'gray'
-        ax.plot(n.x, n.y, 'o', color=color)
-        ax.text(n.x + 0.2, n.y + 0.2, n.name)
-    canvas = FigureCanvasTkAgg(fig, master=frame_plot)
-    canvas.draw()
-    canvas.get_tk_widget().pack()
-    fig.canvas.mpl_connect("button_press_event", on_click)
-
-def plot_neighbors(g, node):
-    actualizar_vecinos()
-    vecinos = set(n.name for n in node.neighbors)
-    global fig, ax, canvas
-    if canvas:
-        canvas.get_tk_widget().destroy()
-    fig, ax = plt.subplots()
-    ax.set_title(f"Vecinos de {node.name}")
-    for seg in g.segments:
-        x = [seg.origin.x, seg.destination.x]
-        y = [seg.origin.y, seg.destination.y]
-        color = 'red' if seg.origin.name == node.name else 'gray'
-        ax.plot(x, y, color)
-    for n in g.nodes:
-        color = 'blue' if n.name == node.name else 'green' if n.name in vecinos else 'gray'
-        ax.plot(n.x, n.y, 'o', color=color)
-        ax.text(n.x + 0.2, n.y + 0.2, n.name)
-    canvas = FigureCanvasTkAgg(fig, master=frame_plot)
-    canvas.draw()
-    canvas.get_tk_widget().pack()
-    fig.canvas.mpl_connect("button_press_event", on_click)
-
-def plot_reachability(g, node):
-    visited = set()
-    queue = deque([node])
-    actualizar_vecinos()
-    while queue:
-        actual = queue.popleft()
-        if actual.name not in visited:
-            visited.add(actual.name)
-            queue.extend(nb for nb in actual.neighbors if nb.name not in visited)
-    global fig, ax, canvas
-    if canvas:
-        canvas.get_tk_widget().destroy()
-    fig, ax = plt.subplots()
-    ax.set_title(f"Alcanzables desde {node.name}")
-    for seg in g.segments:
-        x = [seg.origin.x, seg.destination.x]
-        y = [seg.origin.y, seg.destination.y]
-        if seg.origin.name in visited and seg.destination.name in visited:
-            ax.plot(x, y, 'green')
-        else:
-            ax.plot(x, y, 'gray', alpha=0.2)
-    for n in g.nodes:
-        color = 'blue' if n.name == node.name else 'green' if n.name in visited else 'gray'
-        ax.plot(n.x, n.y, 'o', color=color)
-        ax.text(n.x + 0.2, n.y + 0.2, n.name)
-    canvas = FigureCanvasTkAgg(fig, master=frame_plot)
-    canvas.draw()
-    canvas.get_tk_widget().pack()
-    fig.canvas.mpl_connect("button_press_event", on_click)
-
-def cargar():
-    global current_graph
-    path = filedialog.askopenfilename()
-    if path:
-        if path.endswith("graph_data.txt"):
-            current_graph = CreateGraph_2()
-        elif path.endswith("graph_example.txt"):
-            current_graph = CreateGraph_1()
-        else:
-            current_graph = LoadGraphFromFile(path)
-        actualizar_vecinos()
-        plot_graph(current_graph)
-
-def nuevo():
-    global current_graph
-    current_graph = Graph()
-    plot_graph(current_graph)
-
-def guardar():
-    if not current_graph:
+    if xdata is None or ydata is None:
         return
-    path = filedialog.asksaveasfilename(defaultextension=".txt")
-    if path:
-        SaveGraphToFile(current_graph, path)
-        messagebox.showinfo("Guardado", "Grafo guardado correctamente.")
 
-def mostrar_ejemplo(nombre_archivo):
-    global current_graph
-    if nombre_archivo == "graph_data.txt":
-        current_graph = CreateGraph_2()
-    elif nombre_archivo == "graph_example.txt":
-        current_graph = CreateGraph_1()
+    if event.button == 'up':
+        scale_factor = 1 / base_scale
+    elif event.button == 'down':
+        scale_factor = base_scale
     else:
-        current_graph = LoadGraphFromFile(nombre_archivo)
-    actualizar_vecinos()
-    plot_graph(current_graph)
+        scale_factor = 1
 
-tk.Button(frame_buttons, text="📊 Mostrar Grafo de Ejemplo", command=lambda: mostrar_ejemplo("graph_example.txt"), width=30).pack(pady=3)
-tk.Button(frame_buttons, text="📊 Mostrar Mi Grafo Guardado", command=lambda: mostrar_ejemplo("graph_data.txt"), width=30).pack(pady=3)
-tk.Button(frame_buttons, text="📂 Cargar Grafo", command=cargar, width=30).pack(pady=3)
-tk.Button(frame_buttons, text="🆕 Nuevo Grafo", command=nuevo, width=30).pack(pady=3)
-tk.Button(frame_buttons, text="💾 Guardar Grafo", command=guardar, width=30).pack(pady=3)
-tk.Label(frame_buttons, text="Modos de interacción:").pack(pady=(10,2))
+    new_width = max((xlim[1] - xlim[0]) * scale_factor, 0.01)
+    new_height = max((ylim[1] - ylim[0]) * scale_factor, 0.01)
+
+    relx = (xdata - xlim[0]) / (xlim[1] - xlim[0])
+    rely = (ydata - ylim[0]) / (ylim[1] - ylim[0])
+
+    new_xlim = [xdata - new_width * relx, xdata + new_width * (1 - relx)]
+    new_ylim = [ydata - new_height * rely, ydata + new_height * (1 - rely)]
+
+    ax.set_xlim(new_xlim)
+    ax.set_ylim(new_ylim)
+    event.canvas.draw()
+
+def mostrar_vecinos_manual(point):
+    vecinos = []
+    edges = []
+
+    # Salientes
+    for seg in airspace.navsegments:
+        if seg.origin_number == point.number:
+            destino = airspace.navpoints_by_number.get(seg.destination_number)
+            if destino:
+                vecinos.append(destino)
+                edges.append((point, destino))
+
+        # Entrantes
+        elif seg.destination_number == point.number:
+            origen = airspace.navpoints_by_number.get(seg.origin_number)
+            if origen:
+                vecinos.append(origen)
+                edges.append((origen, point))
+
+    # Evita duplicados si un nodo es vecino por entrada y salida
+    vecinos = list(set(vecinos))
+    plot_airspace(highlight_nodes=[point] + vecinos, highlight_edges=edges, title=f"Vecinos inmediatos de {point.name}")
+
+
+def mostrar_alcanzables_manual(point):
+    visitados = set()
+    cola = [point]
+    edges = []
+    while cola:
+        actual = cola.pop(0)
+        if actual.number in visitados:
+            continue
+        visitados.add(actual.number)
+        for seg in airspace.navsegments:
+            if seg.origin_number == actual.number:
+                destino = airspace.navpoints_by_number.get(seg.destination_number)
+                if destino and destino.number not in visitados:
+                    cola.append(destino)
+                    edges.append((actual, destino))
+    nodos = [airspace.navpoints_by_number[n] for n in visitados if n in airspace.navpoints_by_number]
+    plot_airspace(highlight_nodes=nodos, highlight_edges=edges, title=f"Alcanzables desde {point.name}")
+
+def toggle_costes():
+    global mostrar_costes
+    mostrar_costes = not mostrar_costes
+    plot_airspace()
+
+def toggle_nombres():
+    global mostrar_nombres
+    mostrar_nombres = not mostrar_nombres
+    plot_airspace()
+
+def mostrar_sids_stars():
+    nodos_sid_star = []
+    edges = []
+
+    for aeropuerto in airspace.navairports:
+        # Procesar SIDs (salidas)
+        for sid_id in aeropuerto.sids:
+            sid = airspace.navpoints_by_number.get(sid_id)
+            if sid:
+                nodos_sid_star.append(sid)
+                # Añadir segmentos salientes desde el SID
+                for seg in airspace.navsegments:
+                    if seg.origin_number == sid_id:
+                        destino = airspace.navpoints_by_number.get(seg.destination_number)
+                        if destino:
+                            edges.append((sid, destino))
+
+        # Procesar STARs (llegadas)
+        for star_id in aeropuerto.stars:
+            star = airspace.navpoints_by_number.get(star_id)
+            if star:
+                nodos_sid_star.append(star)
+                # Añadir segmentos entrantes hacia el STAR
+                for seg in airspace.navsegments:
+                    if seg.destination_number == star_id:
+                        origen = airspace.navpoints_by_number.get(seg.origin_number)
+                        if origen:
+                            edges.append((origen, star))
+
+    if not nodos_sid_star:
+        messagebox.showinfo("SIDs/STARs", "No se han encontrado SIDs ni STARs en este espacio aéreo.")
+    else:
+        plot_airspace(highlight_nodes=nodos_sid_star, highlight_edges=edges, title="SIDs y STARs destacados")
+
+
+# === BOTONES ===
+tk.Label(frame_buttons, text="Cargar espacio aéreo:").pack(pady=(10, 2))
+tk.Button(frame_buttons, text="🇨🇦 Catalunya", command=lambda: cargar_espacio_aereo("data/Cat_nav.txt", "data/Cat_seg.txt", "data/Cat_aer.txt", "Espacio aéreo de Catalunya"), width=30).pack(pady=2)
+tk.Button(frame_buttons, text="🇪🇸 España", command=lambda: cargar_espacio_aereo("data/Spain_nav.txt", "data/Spain_seg.txt", "data/Spain_aer.txt", "Espacio aéreo de España"), width=30).pack(pady=2)
+tk.Button(frame_buttons, text="🇪🇺 Europa", command=lambda: cargar_espacio_aereo("data/ECAC_nav.txt", "data/ECAC_seg.txt", "data/ECAC_aer.txt", "Espacio aéreo de Europa"), width=30).pack(pady=2)
+
+tk.Label(frame_buttons, text="Modos de interacción:").pack(pady=(10, 2))
 tk.Button(frame_buttons, text="➕ Añadir Nodo", command=lambda: set_modo("nodo"), width=30).pack(pady=2)
 tk.Button(frame_buttons, text="🔗 Añadir Segmento", command=lambda: set_modo("segmento"), width=30).pack(pady=2)
 tk.Button(frame_buttons, text="👁️ Ver Vecinos", command=lambda: set_modo("vecinos"), width=30).pack(pady=2)
 tk.Button(frame_buttons, text="🌐 Alcanzabilidad", command=lambda: set_modo("alcanzabilidad"), width=30).pack(pady=2)
 tk.Button(frame_buttons, text="📏 Camino más corto", command=lambda: set_modo("camino"), width=30).pack(pady=2)
+tk.Button(frame_buttons, text="💰 Mostrar/Ocultar Costes", command=toggle_costes, width=30).pack(pady=2)
+tk.Button(frame_buttons, text="🧭 Mostrar/Ocultar Nombres", command=toggle_nombres, width=30).pack(pady=2)
+tk.Button(frame_buttons, text="🛫 Mostrar SIDs y STARs", command=lambda: set_modo("sidsstars"), width=30).pack(pady=2)
 
 root.mainloop()
