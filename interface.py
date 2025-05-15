@@ -3,7 +3,6 @@ from tkinter import filedialog, simpledialog, messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from airSpace import AirSpace
-import os
 
 root = tk.Tk()
 root.title("Visualizador del Espacio Aéreo")
@@ -24,6 +23,8 @@ selected_nodes = []
 mostrar_costes = True
 mostrar_nombres = True
 
+
+
 def plot_airspace(highlight_nodes=None, highlight_edges=None, title="Espacio aéreo"):
     global canvas, fig, ax
     if canvas:
@@ -37,10 +38,8 @@ def plot_airspace(highlight_nodes=None, highlight_edges=None, title="Espacio aé
     highlight_edges = highlight_edges or []
 
     for seg in airspace.navsegments:
-        p1 = airspace.navpoints_by_number.get(seg.origin_number)
-        p2 = airspace.navpoints_by_number.get(seg.destination_number)
-        if not p1 or not p2:
-            continue
+        p1 = airspace.navpoints_by_number[seg.origin_number]
+        p2 = airspace.navpoints_by_number[seg.destination_number]
         x = [p1.longitude, p2.longitude]
         y = [p1.latitude, p2.latitude]
         color = 'green' if (p1, p2) in highlight_edges else 'gray'
@@ -66,9 +65,7 @@ def plot_airspace(highlight_nodes=None, highlight_edges=None, title="Espacio aé
     fig.canvas.mpl_connect("button_press_event", on_click)
     fig.canvas.mpl_connect("scroll_event", on_scroll)
 
-def cargar_espacio_aereo(nav_path, seg_path, aer_path, titulo):
-    airspace.load_from_files(nav_path, seg_path, aer_path)
-    plot_airspace(title=titulo)
+
 
 def set_modo(nuevo_modo):
     global modo, selected_nodes
@@ -164,28 +161,10 @@ def on_scroll(event):
     event.canvas.draw()
 
 def mostrar_vecinos_manual(point):
-    vecinos = []
-    edges = []
-
-    # Salientes
-    for seg in airspace.navsegments:
-        if seg.origin_number == point.number:
-            destino = airspace.navpoints_by_number.get(seg.destination_number)
-            if destino:
-                vecinos.append(destino)
-                edges.append((point, destino))
-
-        # Entrantes
-        elif seg.destination_number == point.number:
-            origen = airspace.navpoints_by_number.get(seg.origin_number)
-            if origen:
-                vecinos.append(origen)
-                edges.append((origen, point))
-
-    # Evita duplicados si un nodo es vecino por entrada y salida
-    vecinos = list(set(vecinos))
-    plot_airspace(highlight_nodes=[point] + vecinos, highlight_edges=edges, title=f"Vecinos inmediatos de {point.name}")
-
+    segmentos_salientes = [s for s in airspace.navsegments if s.origin_number == point.number]
+    vecinos = [airspace.navpoints_by_number[s.destination_number] for s in segmentos_salientes]
+    edges = [(point, v) for v in vecinos]
+    plot_airspace(highlight_nodes=[point] + vecinos, highlight_edges=edges, title=f"Vecinos de {point.name}")
 
 def mostrar_alcanzables_manual(point):
     visitados = set()
@@ -198,12 +177,14 @@ def mostrar_alcanzables_manual(point):
         visitados.add(actual.number)
         for seg in airspace.navsegments:
             if seg.origin_number == actual.number:
-                destino = airspace.navpoints_by_number.get(seg.destination_number)
-                if destino and destino.number not in visitados:
+                destino = airspace.navpoints_by_number[seg.destination_number]
+                if destino.number not in visitados:
                     cola.append(destino)
                     edges.append((actual, destino))
-    nodos = [airspace.navpoints_by_number[n] for n in visitados if n in airspace.navpoints_by_number]
+    nodos = [airspace.navpoints_by_number[n] for n in visitados]
     plot_airspace(highlight_nodes=nodos, highlight_edges=edges, title=f"Alcanzables desde {point.name}")
+
+
 
 def toggle_costes():
     global mostrar_costes
@@ -216,45 +197,21 @@ def toggle_nombres():
     plot_airspace()
 
 def mostrar_sids_stars():
-    nodos_sid_star = []
-    edges = []
-
+    nodos = []
     for aeropuerto in airspace.navairports:
-        # Procesar SIDs (salidas)
-        for sid_id in aeropuerto.sids:
-            sid = airspace.navpoints_by_number.get(sid_id)
-            if sid:
-                nodos_sid_star.append(sid)
-                # Añadir segmentos salientes desde el SID
-                for seg in airspace.navsegments:
-                    if seg.origin_number == sid_id:
-                        destino = airspace.navpoints_by_number.get(seg.destination_number)
-                        if destino:
-                            edges.append((sid, destino))
+        for sid in aeropuerto.sids:
+            if sid in airspace.navpoints_by_number:
+                nodos.append(airspace.navpoints_by_number[sid])
+        for star in aeropuerto.stars:
+            if star in airspace.navpoints_by_number:
+                nodos.append(airspace.navpoints_by_number[star])
+    plot_airspace(highlight_nodes=nodos, title="SIDs y STARs destacados")
 
-        # Procesar STARs (llegadas)
-        for star_id in aeropuerto.stars:
-            star = airspace.navpoints_by_number.get(star_id)
-            if star:
-                nodos_sid_star.append(star)
-                # Añadir segmentos entrantes hacia el STAR
-                for seg in airspace.navsegments:
-                    if seg.destination_number == star_id:
-                        origen = airspace.navpoints_by_number.get(seg.origin_number)
-                        if origen:
-                            edges.append((origen, star))
-
-    if not nodos_sid_star:
-        messagebox.showinfo("SIDs/STARs", "No se han encontrado SIDs ni STARs en este espacio aéreo.")
-    else:
-        plot_airspace(highlight_nodes=nodos_sid_star, highlight_edges=edges, title="SIDs y STARs destacados")
-
-
-# === BOTONES ===
+# === BOTONES COMPLETOS ===
 tk.Label(frame_buttons, text="Cargar espacio aéreo:").pack(pady=(10, 2))
-tk.Button(frame_buttons, text="🇨🇦 Catalunya", command=lambda: cargar_espacio_aereo("data/Cat_nav.txt", "data/Cat_seg.txt", "data/Cat_aer.txt", "Espacio aéreo de Catalunya"), width=30).pack(pady=2)
-tk.Button(frame_buttons, text="🇪🇸 España", command=lambda: cargar_espacio_aereo("data/Spain_nav.txt", "data/Spain_seg.txt", "data/Spain_aer.txt", "Espacio aéreo de España"), width=30).pack(pady=2)
-tk.Button(frame_buttons, text="🇪🇺 Europa", command=lambda: cargar_espacio_aereo("data/ECAC_nav.txt", "data/ECAC_seg.txt", "data/ECAC_aer.txt", "Espacio aéreo de Europa"), width=30).pack(pady=2)
+tk.Button(frame_buttons, text="🇨🇦 Catalunya", command=lambda: airspace.load_from_files("data/Cat_nav.txt", "data/Cat_seg.txt", "data/Cat_aer.txt") or plot_airspace(title="Espacio aéreo de Catalunya"), width=30).pack(pady=2)
+tk.Button(frame_buttons, text="🇪🇸 España", command=lambda: airspace.load_from_files("data/Spain_nav.txt", "data/Spain_seg.txt", "data/Spain_aer.txt") or plot_airspace(title="Espacio aéreo de España"), width=30).pack(pady=2)
+tk.Button(frame_buttons, text="🇪🇺 Europa", command=lambda: airspace.load_from_files("data/ECAC_nav.txt", "data/ECAC_seg.txt", "data/ECAC_aer.txt") or plot_airspace(title="Espacio aéreo de Europa"), width=30).pack(pady=2)
 
 tk.Label(frame_buttons, text="Modos de interacción:").pack(pady=(10, 2))
 tk.Button(frame_buttons, text="➕ Añadir Nodo", command=lambda: set_modo("nodo"), width=30).pack(pady=2)
@@ -262,8 +219,8 @@ tk.Button(frame_buttons, text="🔗 Añadir Segmento", command=lambda: set_modo(
 tk.Button(frame_buttons, text="👁️ Ver Vecinos", command=lambda: set_modo("vecinos"), width=30).pack(pady=2)
 tk.Button(frame_buttons, text="🌐 Alcanzabilidad", command=lambda: set_modo("alcanzabilidad"), width=30).pack(pady=2)
 tk.Button(frame_buttons, text="📏 Camino más corto", command=lambda: set_modo("camino"), width=30).pack(pady=2)
-tk.Button(frame_buttons, text="💰 Mostrar/Ocultar Costes", command=toggle_costes, width=30).pack(pady=2)
 tk.Button(frame_buttons, text="🧭 Mostrar/Ocultar Nombres", command=toggle_nombres, width=30).pack(pady=2)
 tk.Button(frame_buttons, text="🛫 Mostrar SIDs y STARs", command=lambda: set_modo("sidsstars"), width=30).pack(pady=2)
+
 
 root.mainloop()
