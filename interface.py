@@ -3,6 +3,8 @@ from tkinter import filedialog, simpledialog, messagebox, ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 import math
+
+plt.style.use('seaborn-v0_8')
 import os
 import webbrowser
 
@@ -16,12 +18,18 @@ root = tk.Tk()
 root.title("Visualizador del Espacio Aéreo y Grafos Clásicos")
 root.geometry("1250x800")
 
-frame_buttons = tk.Frame(root)
+# Estilo moderno con ttk
+style = ttk.Style(root)
+style.theme_use('clam')
+style.configure('TButton', font=('Segoe UI', 10), padding=5)
+style.configure('TLabel', font=('Segoe UI', 11))
+
+frame_buttons = ttk.Frame(root)
 frame_buttons.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
 
 canvas_buttons = tk.Canvas(frame_buttons, borderwidth=0, width=340)
-scrollbar_buttons = tk.Scrollbar(frame_buttons, orient="vertical", command=canvas_buttons.yview)
-scrollable_frame = tk.Frame(canvas_buttons)
+scrollbar_buttons = ttk.Scrollbar(frame_buttons, orient="vertical", command=canvas_buttons.yview)
+scrollable_frame = ttk.Frame(canvas_buttons)
 
 scrollable_frame.bind(
     "<Configure>", lambda e: canvas_buttons.configure(scrollregion=canvas_buttons.bbox("all"))
@@ -33,7 +41,7 @@ canvas_buttons.configure(yscrollcommand=scrollbar_buttons.set)
 canvas_buttons.pack(side="left", fill="both", expand=True)
 scrollbar_buttons.pack(side="right", fill="y")
 
-frame_plot = tk.Frame(root)
+frame_plot = ttk.Frame(root)
 frame_plot.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
 airspace = AirSpace()
@@ -317,30 +325,30 @@ def toggle_nombres():
     plot_airspace()
 
 # === BOTONES DE LA INTERFAZ ===
-tk.Label(scrollable_frame, text="Espacio aéreo moderno:").pack(pady=(10, 2))
-tk.Button(scrollable_frame, text="\U0001F1E8 Catalunya", command=lambda: airspace.load_from_files("data/Cat_nav.txt", "data/Cat_seg.txt", "data/Cat_aer.txt") or plot_airspace(title="Espacio aéreo de Catalunya"), width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="\U0001F1EA España", command=lambda: airspace.load_from_files("data/Spain_nav.txt", "data/Spain_seg.txt", "data/Spain_aer.txt") or plot_airspace(title="Espacio aéreo de España"), width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="\U0001F1EA\U0001F1FA Europa", command=lambda: airspace.load_from_files("data/ECAC_nav.txt", "data/ECAC_seg.txt", "data/ECAC_aer.txt") or plot_airspace(title="Espacio aéreo de Europa"), width=30).pack(pady=2)
+ttk.Label(scrollable_frame, text="Espacio aéreo moderno:").pack(pady=(10, 2))
+ttk.Button(scrollable_frame, text="\U0001F1E8 Catalunya", command=lambda: airspace.load_from_files("data/Cat_nav.txt", "data/Cat_seg.txt", "data/Cat_aer.txt") or plot_airspace(title="Espacio aéreo de Catalunya"), width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="\U0001F1EA España", command=lambda: airspace.load_from_files("data/Spain_nav.txt", "data/Spain_seg.txt", "data/Spain_aer.txt") or plot_airspace(title="Espacio aéreo de España"), width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="\U0001F1EA\U0001F1FA Europa", command=lambda: airspace.load_from_files("data/ECAC_nav.txt", "data/ECAC_seg.txt", "data/ECAC_aer.txt") or plot_airspace(title="Espacio aéreo de Europa"), width=30).pack(pady=2)
 
-tk.Label(scrollable_frame, text="Modos de interacción:").pack(pady=(10, 2))
-tk.Button(scrollable_frame, text="➕ Añadir Nodo", command=lambda: set_modo("nodo"), width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="🔗 Añadir Segmento", command=lambda: set_modo("segmento"), width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="👁️ Ver Vecinos", command=lambda: set_modo("vecinos"), width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="🌐 Alcanzabilidad", command=lambda: set_modo("alcanzabilidad"), width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="📏 Camino más corto", command=lambda: set_modo("camino"), width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="🛫 Mostrar SIDs y STARs", command=lambda: set_modo("sidsstars"), width=30).pack(pady=2)
+ttk.Label(scrollable_frame, text="Modos de interacción:").pack(pady=(10, 2))
+ttk.Button(scrollable_frame, text="➕ Añadir Nodo", command=lambda: set_modo("nodo"), width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="🔗 Añadir Segmento", command=lambda: set_modo("segmento"), width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="👁️ Ver Vecinos", command=lambda: set_modo("vecinos"), width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="🌐 Alcanzabilidad", command=lambda: set_modo("alcanzabilidad"), width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="📏 Camino más corto", command=lambda: set_modo("camino"), width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="🛫 Mostrar SIDs y STARs", command=lambda: set_modo("sidsstars"), width=30).pack(pady=2)
 
-tk.Button(scrollable_frame, text="🌍 Abrir Google Earth", command=abrir_google_earth, width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="🧱 Mostrar/Ocultar Nombres", command=toggle_nombres, width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="📀 Mostrar/Ocultar Distancias", command=toggle_costes, width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="🌍 Abrir Google Earth", command=abrir_google_earth, width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="🧱 Mostrar/Ocultar Nombres", command=toggle_nombres, width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="📀 Mostrar/Ocultar Distancias", command=toggle_costes, width=30).pack(pady=2)
 
-tk.Label(scrollable_frame, text="Grafo clásico:").pack(pady=(10, 2))
-tk.Button(scrollable_frame, text="📂 Cargar Grafo", command=cargar, width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="🆕 Nuevo Grafo", command=nuevo, width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="📊 Mostrar Mi Grafo Guardado", command=lambda: mostrar_ejemplo("graph_data.txt"), width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="📀 Guardar Grafo", command=guardar, width=30).pack(pady=2)
-tk.Label(scrollable_frame, text="Exportar a Google Earth:").pack(pady=(10, 2))
-tk.Button(scrollable_frame, text="📤 Exportar Puntos (KML)", command=exportar_navpoints, width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="📤 Exportar Rutas (KML)", command=exportar_segmentos, width=30).pack(pady=2)
-tk.Button(scrollable_frame, text="📤 Exportar Camino (KML)", command=exportar_camino, width=30).pack(pady=2)
+ttk.Label(scrollable_frame, text="Grafo clásico:").pack(pady=(10, 2))
+ttk.Button(scrollable_frame, text="📂 Cargar Grafo", command=cargar, width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="🆕 Nuevo Grafo", command=nuevo, width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="📊 Mostrar Mi Grafo Guardado", command=lambda: mostrar_ejemplo("graph_data.txt"), width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="📀 Guardar Grafo", command=guardar, width=30).pack(pady=2)
+ttk.Label(scrollable_frame, text="Exportar a Google Earth:").pack(pady=(10, 2))
+ttk.Button(scrollable_frame, text="📤 Exportar Puntos (KML)", command=exportar_navpoints, width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="📤 Exportar Rutas (KML)", command=exportar_segmentos, width=30).pack(pady=2)
+ttk.Button(scrollable_frame, text="📤 Exportar Camino (KML)", command=exportar_camino, width=30).pack(pady=2)
 root.mainloop()
