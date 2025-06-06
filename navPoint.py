@@ -5,6 +5,12 @@ class NavPoint:
         self.latitude = latitude
         self.longitude = longitude
 
+    def distance_to(self, other: 'NavPoint') -> float:
+        """Return the Euclidean distance to another NavPoint."""
+        dx = self.latitude - other.latitude
+        dy = self.longitude - other.longitude
+        return (dx ** 2 + dy ** 2) ** 0.5
+
     def __eq__(self, other):
         return isinstance(other, NavPoint) and self.number == other.number
 

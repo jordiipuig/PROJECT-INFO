@@ -105,6 +105,29 @@ class AirSpace:
                     vecinos.append(origen)
         return vecinos
 
+    def get_reachables(self, start):
+        """Return all NavPoints reachable from ``start`` using the defined segments."""
+        visited = set()
+        queue = [start]
+
+        while queue:
+            current = queue.pop(0)
+            if current.number in visited:
+                continue
+            visited.add(current.number)
+
+            for seg in self.navsegments:
+                if seg.origin_number == current.number:
+                    neighbor = self.navpoints_by_number.get(seg.destination_number)
+                    if neighbor and neighbor.number not in visited:
+                        queue.append(neighbor)
+                elif seg.destination_number == current.number:
+                    neighbor = self.navpoints_by_number.get(seg.origin_number)
+                    if neighbor and neighbor.number not in visited:
+                        queue.append(neighbor)
+
+        return [self.navpoints_by_number[n] for n in visited]
+
     def shortest_path(self, origen, destino):
         distancias = {p.number: float('inf') for p in self.navpoints}
         anteriores = {}
